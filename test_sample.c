@@ -15,6 +15,8 @@ int D1234_Main(int argc, char *argv[]) {
 
     D1000_Inq(NULL); // Call the new style function
 
+    D3001_Depth1(); // Call depth test chain
+
     return 0;
 }
 
@@ -66,3 +68,11 @@ static int D1000_Inq(void *pocket)
     // This function demonstrates the new parsing logic.
     return 1;
 }
+
+// --- Depth Test Functions ---
+void D3006_Depth6() { /* End of chain */ }
+void D3005_Depth5() { D3006_Depth6(); }
+void D3004_Depth4() { D3005_Depth5(); }
+void D3003_Depth3() { D3004_Depth4(); }
+void D3002_Depth2() { D3003_Depth3(); }
+void D3001_Depth1() { D3002_Depth2(); }

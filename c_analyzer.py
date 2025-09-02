@@ -49,25 +49,31 @@ class CParser:
         for item, line in stack:
             self.syntax_errors.append(f"Unclosed '{item}' from line {line}")
 
-    def get_call_tree(self, root_function):
+    def get_call_tree(self, root_function, max_depth=5):
         """Builds a hierarchical call tree starting from a root function."""
         if root_function not in self.functions:
             return None
 
-        def build_node(func_name, visited):
+        def build_node(func_name, visited, depth):
             if func_name in visited:
                 return {"name": f"{func_name} (Recursion)", "children": []}
 
-            visited.add(func_name)
+            if depth >= max_depth:
+                # Add an indicator if there are more calls beyond the depth limit
+                if self.functions.get(func_name, {}).get('calls'):
+                    return {"name": f"{func_name} (...)", "children": []}
+                else:
+                    return {"name": func_name, "children": []}
 
+            visited.add(func_name)
             node = {"name": func_name, "children": []}
             if func_name in self.functions:
                 for called_func in self.functions[func_name]["calls"]:
                     if called_func in self.functions:
-                        node["children"].append(build_node(called_func, visited.copy()))
+                        node["children"].append(build_node(called_func, visited.copy(), depth + 1))
             return node
 
-        return build_node(root_function, set())
+        return build_node(root_function, set(), 0)
 
     def _find_closing_brace(self, code, start_index):
         depth = 1
