@@ -13,6 +13,8 @@ int D1234_Main(int argc, char *argv[]) {
 
     CALLS(CBTG5400_Main); // Module call
 
+    D1000_Inq(NULL); // Call the new style function
+
     return 0;
 }
 
@@ -52,4 +54,15 @@ void X0001_PrintOutput() {
 // A function with a syntax error for testing
 void Z9999_BrokenFunction( {
     int y = 1;
+}
+
+static int D1000_Inq(void *pocket)
+/*
+    @DESC       A test function with a new comment style.
+    @IN_ARG     pocket - A pointer to a pocket.
+    @OUT_ARG    Returns 1 on success.
+*/
+{
+    // This function demonstrates the new parsing logic.
+    return 1;
 }

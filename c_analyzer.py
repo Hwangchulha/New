@@ -80,18 +80,8 @@ class CParser:
                     return i
         return -1
 
-    def _parse_doc_comment(self, func_def_start_pos):
+    def _parse_tags_from_comment(self, comment_content):
         docs = {}
-        comment_end_pos = self.original_code.rfind('*/', 0, func_def_start_pos)
-        if comment_end_pos == -1: return docs
-
-        code_between = self.original_code[comment_end_pos + 2 : func_def_start_pos]
-        if code_between.strip(): return docs
-
-        comment_start_pos = self.original_code.rfind('/*', 0, comment_end_pos)
-        if comment_start_pos == -1: return docs
-
-        comment_content = self.original_code[comment_start_pos + 2 : comment_end_pos]
         for tag_match in re.finditer(r'@(\w+)\s*:\s*(.*?)(?=\s*@|\s*\*/)', comment_content, re.DOTALL):
             tag = tag_match.group(1).upper()
             value = tag_match.group(2).strip()
@@ -99,21 +89,45 @@ class CParser:
         return docs
 
     def _parse_functions(self):
-        for match in PATTERNS["function_def"].finditer(self.code_without_comments):
+        for match in PATTERNS["function_def"].finditer(self.original_code):
             ret_type = match.group(1).strip().replace('\n', ' ')
             func_name = match.group(2).strip()
             params = match.group(3).strip()
 
             if func_name in self.functions: continue
 
-            docs = self._parse_doc_comment(match.start())
+            docs = {}
+            search_start = match.end()
 
-            body_start_brace = match.end()
-            body_end_brace = self._find_closing_brace(self.code_without_comments, body_start_brace)
+            # 1. Forward search for comment (new style)
+            search_area = self.original_code[search_start : search_start + 2048]
+            comment_match = re.search(r"/\*(.*?)\*/", search_area, re.DOTALL)
+            brace_match = re.search(r"\{", search_area)
+
+            body_start_brace_rel = brace_match.start() if brace_match else -1
+
+            if comment_match and body_start_brace_rel != -1 and comment_match.start() < body_start_brace_rel:
+                docs = self._parse_tags_from_comment(comment_match.group(1))
+
+            # 2. If no comment found, backward search (old style)
+            if not docs:
+                comment_end_pos = self.original_code.rfind('*/', 0, match.start())
+                if comment_end_pos != -1:
+                    code_between = self.original_code[comment_end_pos + 2 : match.start()]
+                    if not code_between.strip():
+                        comment_start_pos = self.original_code.rfind('/*', 0, comment_end_pos)
+                        if comment_start_pos != -1:
+                            docs = self._parse_tags_from_comment(self.original_code[comment_start_pos + 2 : comment_end_pos])
+
+            if body_start_brace_rel == -1: continue
+
+            body_start_abs = search_start + body_start_brace_rel
+            body_end_abs = self._find_closing_brace(self.original_code, body_start_abs + 1)
 
             body = ""
-            if body_end_brace != -1:
-                body = self.code_without_comments[body_start_brace:body_end_brace]
+            if body_end_abs != -1:
+                body_with_comments = self.original_code[body_start_abs + 1 : body_end_abs]
+                body = self._remove_comments(body_with_comments)
 
             line_number = self.original_code.count('\n', 0, match.start()) + 1
             self.functions[func_name] = {
@@ -153,7 +167,7 @@ class CParser:
 PATTERNS = {
     # Function Def: (return_type) (func_name) (params)
     "function_def": re.compile(
-        r"([\w\s\*&]+?)\s+([A-Z]\d{4}_\w+)\s*\((.*?)\)\s*\{",
+        r"([\w\s\*&]+?)\s+([A-Z]\d{4}_\w+)\s*\(([\s\S]*?)\)",
         re.DOTALL
     ),
     # Function Call: (func_name)
